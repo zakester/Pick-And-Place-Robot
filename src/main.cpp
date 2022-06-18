@@ -1,315 +1,304 @@
 #include <Arduino.h>
-#include <ESP8266WiFi.h>
-#include <ESP8266WebServer.h>
 #include <ArduinoJson.h>
-#include <PID_v1.h>
+#include <ESP8266WebServer.h>
+#include <ESP8266WiFi.h>
 
 /** Pins definitions */
-#define IN_1 16 // D0
-#define IN_2 5  // D1
-#define ENA 4   // D2
+#define IN_1 16  // D0
+#define IN_2 5   // D1
+#define ENA 4    // D2
 
-#define IN_3 0 // D3
-#define IN_4 2 // D4
-#define ENB 14 // D5
+#define IN_3 0  // D3
+#define IN_4 2  // D4
+#define ENB 14  // D5
+
+#define ENCODER_PIN 12  // D6
+
+#define ECHO 13 // D7
+#define TRIG 15 // D8
 
 /** Define Robot speed */
 double speed = 0.0;
-double speedRight = 0.0;
+int ref = 0.0;
 
 const char *ssid = "PAP Robot";
-const char *PAP_ROBOT_HTML = "<html><body><h1>MH Robot</h1></body></html>";
+const char *PAP_ROBOT_HTML = "<html><body><h1>PAP Robot</h1></body></html>";
 
 ESP8266WebServer server(80);
 
+/** To Configure IP Address and make it static */
 IPAddress localIP(192, 168, 5, 1);
 IPAddress gateway(192, 168, 5, 1);
 IPAddress mask(255, 255, 255, 0);
 
 /** Convert string response to JSON */
-DynamicJsonDocument strToJSON(String data)
-{
-  DynamicJsonDocument document(1024);
-  deserializeJson(document, data);
+DynamicJsonDocument strToJSON(String data) {
+    DynamicJsonDocument document(1024);
+    deserializeJson(document, data);
 
-  return document;
+    return document;
 }
 
-void stopLeftMotor()
-{
-  digitalWrite(IN_1, LOW);
-  digitalWrite(IN_2, LOW);
+
+void motor(int dir, int pwmPin, int pwmSpeed, int in1, int in2) {
+    analogWrite(pwmPin, pwmSpeed); // set speed
+    if (dir == 1) { // rotate to clockwise
+        digitalWrite(in1, HIGH);
+        digitalWrite(in2, LOW);
+    } else if (dir == -1) { // rotate to anti clockwise
+        digitalWrite(in1, LOW);
+        digitalWrite(in2, HIGH);
+    } else { // stop motor
+        digitalWrite(in1, LOW);
+        digitalWrite(in2, LOW);
+    }
 }
 
-void stopRightMotor()
-{
-  digitalWrite(IN_3, LOW);
-  digitalWrite(IN_4, LOW);
+long duration;
+double distance;
+double ultrasonic() {
+    // Clears TRIG pin if HIGH
+    digitalWrite(TRIG, LOW);
+    delayMicroseconds(10);
+    // Sets the TRIG to HIGH (ACTIVE) for 10 microseconds
+    digitalWrite(TRIG, HIGH);
+    delayMicroseconds(10);
+    digitalWrite(TRIG, LOW);
+
+    // Reads the ECHO pin
+    duration = pulseIn(ECHO, HIGH);
+    // Calculating the distance
+    distance =
+        duration * 0.034 / 2; 
+
+    return distance;
 }
 
-/** Stop robot */
-void stopRobot()
-{
-  analogWrite(ENB, 0);
-  analogWrite(ENA, 0);
+int dir = 0;
+//int prvDir = 0;
+int pos = 0;
+bool startUltrasonic = false;
+bool startRotation = true;
 
-  digitalWrite(IN_1, LOW);
-  digitalWrite(IN_2, LOW);
-
-  digitalWrite(IN_3, LOW);
-  digitalWrite(IN_4, LOW);
-}
-
-/** Move robot foward */
-void moveFoward()
-{
-  /* First motor */
-  analogWrite(ENA, speed);
-  digitalWrite(IN_1, HIGH);
-  digitalWrite(IN_2, LOW);
-
-  /* Second motor */
-  analogWrite(ENB, speed);
-  digitalWrite(IN_3, HIGH);
-  digitalWrite(IN_4, LOW);
-}
-
-/** Move robot backwards */
-void moveBackward()
-{
-  /* First motor */
-  analogWrite(ENA, speed);
-  digitalWrite(IN_1, LOW);
-  digitalWrite(IN_2, HIGH);
-
-  /* Second motor */
-  analogWrite(ENB, speed);
-  digitalWrite(IN_3, LOW);
-  digitalWrite(IN_4, HIGH);
-}
-
-/** Move robot to the right */
-void moveToRight()
-{
-  /* First motor */
-  if (speedRight != 0)
-  {
-    analogWrite(ENB, speedRight);
-    digitalWrite(IN_3, HIGH);
-    digitalWrite(IN_4, LOW);
-  }
-  else
-  {
-    analogWrite(ENB, speed);
-    digitalWrite(IN_3, LOW);
-    digitalWrite(IN_4, HIGH);
-  }
-
-  // /* Move First Motor in Reverse */
-  // digitalWrite(IN_1, LOW);
-  // digitalWrite(IN_2, HIGH);
-}
-
-/** Move robot to the left */
-void moveToLeft()
-{
-  /* Second motor */
-  if (speed != 0)
-  {
-    analogWrite(ENA, speed);
-    digitalWrite(IN_1, HIGH);
-    digitalWrite(IN_2, LOW);
-  }
-  else
-  {
-    analogWrite(ENA, speedRight);
-    digitalWrite(IN_1, LOW);
-    digitalWrite(IN_2, HIGH);
-  }
-
-  // /* Move First Motor in Reverse */
-  // digitalWrite(IN_3, LOW);
-  // digitalWrite(IN_4, HIGH);
+// Interaption function, if encoder is rise HIGH, pos++
+void IRAM_ATTR readEncoder() {
+    pos++;
 }
 
 bool isReady = false;
 bool isCaptured = false;
-bool isMoving = false;
-bool isObjectLeftSide = false;
-int direction = 0; // 0: Middel, 1: Right, -1: Left
-int error = 5;
-double targetRotationAngle = 0.0;
 
-double setpointRotation = 0.0;
-double currentRotation = 0.0;
 
-void do180Rotation(int currentRotationDegree)
-{
-  if (!(targetRotationAngle + 360 + 5 <= currentRotationDegree && targetRotationAngle + 360 - 55 <= currentRotationDegree))
-  {
-    moveToLeft();
-  }
-  else
-    stopRobot();
+long prevT = 0;
+float eprev = 0;
+float eintegral = 0;
+
+void rotateRobot(double kp, double ki, double kd) {
+
+    /** Calculate u(t) PID Controller */
+
+    // time difference
+    long currT = micros();
+    float deltaT =
+        ((float)(currT - prevT)) / (1.0e6);  // 1.0e6 to convert microsec to sec
+    prevT = currT;
+
+    // error
+    int e = ref - pos;
+
+    // derivative
+    float dedt = (e - eprev) / (deltaT);
+
+    // integral
+    eintegral = eintegral + e * deltaT;
+
+    // input signal
+    float u = kp * e + kd * dedt + ki * eintegral;
+
+    // motor power
+    speed = fabs(u);
+
+    // set speed max valeu to 150
+    int max_speed = 150;
+    if (speed > max_speed) {
+        speed = max_speed;
+    }
+
+    // start rotating
+    if (e >= 0) {
+        startUltrasonic = false;
+        //dir = prvDir;
+    } else {
+        // Turn Off The Motor
+        speed = 0;
+        dir = 0;
+        startUltrasonic = true;
+        startRotation = false;
+    }
+
+    // signal the motor
+    motor(dir, ENA, speed, IN_1, IN_2);
+
+    if (startUltrasonic == true) {
+        delay(1000);
+        pos = 0; // reset position
+    }
+    // store previous error
+    eprev = e;
 }
-double Kp = 3, Ki = 3, Kd = 0;
-PID leftMotorPID(&currentRotation, &speed, &setpointRotation, Kp, Ki, Kd, DIRECT);
-PID rightMotorPID(&currentRotation, &speedRight, &setpointRotation, Kp, Ki, Kd, REVERSE);
+
+
+
+
+double robotRotationDegree(double width, double y0, double x0) {
+    double degreePerPx = 0.0425;
+    double dist = abs(640 - x0);
+
+    return dist * degreePerPx;
+}
 
 /* The main page */
-void handle_root()
-{
-
-  if (!server.hasArg("plain"))
-  {
-    server.send(200, "text/html", PAP_ROBOT_HTML);
-    return;
-  }
-
-  String data = server.arg("plain");
-
-  DynamicJsonDocument document = strToJSON(data);
-
-  String x = document["x"];
-  String y = document["y"];
-  String label = document["label"];
-  String width = document["width"];
-  String height = document["height"];
-  String rotationDegree = document["rotationDegree"];
-  String objectAngle = document["objectAngle"];
-  String diffAngle = document["diffAngle"];
-  currentRotation = map(rotationDegree.toDouble(), 0, 360, 0, 255);
-  // Do Nothing While the App didn't detect anything
-  while (x.toInt() == -9999)
-  {
-    isReady = false;
-    return;
-  }
-
-  // Serial.println("x: " + objectAngle + "diffAngle: " + diffAngle);
-
-  double rotationDegreeRobot = 0.0;
-
-  // Wait for 1 second till the AI complete processing
-  if (!isReady)
-  {
-    if (label == "zone" && !isCaptured)
-      return;
-    delay(1000);
-    rotationDegreeRobot = abs(objectAngle.toDouble() - diffAngle.toDouble());
-    if (x.toInt() < 500)
-    {
-      targetRotationAngle = rotationDegree.toInt() - rotationDegreeRobot;
-      direction = -1;
+void handle_root() {
+    if (!server.hasArg("plain")) {
+        server.send(200, "text/html", PAP_ROBOT_HTML);
+        return;
     }
-    else if (x.toInt() > 500)
-    {
-      targetRotationAngle = rotationDegree.toInt() + rotationDegreeRobot;
-      direction = 1;
+
+    String data = server.arg("plain");
+
+    DynamicJsonDocument document = strToJSON(data);
+
+    /** BBox Information */
+    String x = document["x"];
+    String y = document["y"];
+    String label = document["label"];
+    String width = document["width"];
+
+    String rotationDegree = document["rotationDegree"];
+
+
+    // Do Nothing While the App didn't detect anything
+    while (x.toInt() == -9999) {
+        isReady = false;
+        return;
     }
-    if (targetRotationAngle == 0)
-      return;
-    isReady = true;
-    setpointRotation = map(targetRotationAngle, 0, 360, 0, 255);
-    leftMotorPID.Compute();
-    rightMotorPID.Compute();
-    Serial.println(targetRotationAngle);
-    Serial.println(setpointRotation);
 
-    Serial.print("speed: ");
-    Serial.println(speed);
-    Serial.println("==========================================");
-    std::string d = "{ \"speedLeft\":" + std::to_string(speed) + ", \"speedRight\":" + std::to_string(speedRight) + ", \"setpoint\":" + std::to_string(setpointRotation) + ", \"currentRotation\":" + std::to_string(currentRotation) + "}";
-    server.send(200, "text/html", d.c_str());
-  }
-  else
-  {
-    leftMotorPID.Compute();
-    rightMotorPID.Compute();
-    std::string d = "{ \"speedLeft\":" + std::to_string(speed) + ", \"speedRight\":" + std::to_string(speedRight) + ", \"setpoint\":" + std::to_string(setpointRotation) + ", \"currentRotation\":" + std::to_string(currentRotation) + "}";
-    server.send(200, "text/html", d.c_str());
-    Serial.print("setPointRotation: ");
-    Serial.println(setpointRotation);
-    Serial.print("currentRotation: ");
-    Serial.println(currentRotation);
+    // Serial.println("x: " + objectAngle + "diffAngle: " + diffAngle);
 
-    Serial.print("speed: ");
-    Serial.println(speed);
+    double rotationDegreeRobot = 0.0;
 
-    Serial.print("speed Right: ");
-    Serial.println(speedRight);
+    // Wait for 1 second till the AI complete processing
+    if (!isReady) {
+        if (label == "zone" && isCaptured == false) return;
+        delay(500);
+        pos = 0;
+        rotationDegreeRobot =
+            robotRotationDegree(width.toDouble(), y.toDouble(), x.toDouble());
+        ref = std::round(rotationDegreeRobot / 2.3); 
+        if (x.toInt() < 500) {
+            dir = -1;
+        } else if (x.toInt() > 500) {
+            dir = 1;
+        }
 
-    if (label == "zone" && !isCaptured)
-      return;
-    moveToLeft();
-    moveToRight();
-  }
+        if (ref == 0) return;
+        if (dir == 1) {
+            ref -= 3;
+        }
+
+        //prvDir = dir;
+
+        isReady = true;
+
+         Serial.println(ref);
+
+
+        std::string d =
+            "{ \"speed\":" + std::to_string(speed/10) +
+            ", \"ref\":" + std::to_string(ref) +
+            ", \"pos\":" + std::to_string(pos) + "}";
+        server.send(200, "text/html", d.c_str());
+    } else {
+        std::string d =
+            "{ \"speed\":" + std::to_string(speed/10) +
+            ", \"ref\":" + std::to_string(ref) +
+            ", \"pos\":" + std::to_string(pos) + "}";
+        server.send(200, "text/html", d.c_str());
+
+        if (label == "zone" && isCaptured == false) return;
+        if (startRotation == true) {
+            rotateRobot(13, 0.3, 1.6); // Kp = 13, Ki = 0.1, Kd = 1
+        } else if (startUltrasonic == true) {
+            double dist = ultrasonic();
+            // Move foward with ON / OFF Controller
+            if (dist >= 30) {
+                motor(1, ENA, 100, IN_1, IN_2);
+                motor(1, ENB, 100, IN_3, IN_4);
+            } else { // stop
+                motor(0, ENA, 0, IN_1, IN_2);
+                motor(0, ENB, 0, IN_3, IN_4);
+                startUltrasonic = false;
+            }
+        }
+
+    }
 }
 
 /* When Page is not found */
-void handle_notFound()
-{
-  server.send(404, "text/html", "Not Found");
-}
+void handle_notFound() { server.send(404, "text/html", "Not Found"); }
 
 /* Setup Access */
-void setup_AP()
-{
+void setup_AP() {
+    /* WiFi Mode Access Point */
+    WiFi.mode(WIFI_AP);
 
-  /* WiFi Mode Access Point */
-  WiFi.mode(WIFI_AP);
+    /* Access Point Configuration */
+    if (!WiFi.softAPConfig(localIP, gateway, mask)) {
+        Serial.println("AP Configuration Faild!");
+    } else {
+        Serial.println("AP Configuration Sccee!");
+    }
 
-  /* Access Point Configuration */
-  if (!WiFi.softAPConfig(localIP, gateway, mask))
-  {
-    Serial.println("AP Configuration Faild!");
-  }
-  else
-  {
-    Serial.println("AP Configuration Sccee!");
-  }
-
-  /* Start Access Point */
-  WiFi.softAP(ssid);
+    /* Start Access Point */
+    WiFi.softAP(ssid);
 }
 
-void setup()
-{
-  // LED OUTPUT
-  pinMode(16, OUTPUT);
+void setup() {
+    // LED OUTPUT
+    pinMode(16, OUTPUT);
 
-  /** Pins for the first motor */
-  pinMode(IN_1, OUTPUT);
-  pinMode(IN_2, OUTPUT);
-  pinMode(ENA, OUTPUT);
+    /** Encoder Input PIN */
+    pinMode(ENCODER_PIN, INPUT);
 
-  /** Pins for the second motor */
-  pinMode(IN_3, OUTPUT);
-  pinMode(IN_4, OUTPUT);
-  pinMode(ENB, OUTPUT);
-  /** Start Serial at port 115200 */
-  Serial.begin(115200);
-  while (!Serial)
-    ;
-  leftMotorPID.SetOutputLimits(0, 110);
-  rightMotorPID.SetOutputLimits(0, 110);
-  leftMotorPID.SetMode(AUTOMATIC);
-  rightMotorPID.SetMode(AUTOMATIC);
-  // Adjust PID values
-  leftMotorPID.SetTunings(Kp, Ki, Kd);
-  rightMotorPID.SetTunings(Kp, Ki, Kd);
-  /* Setup and configure Access Point */
-  setup_AP();
+    /** Ultrasonic setup */
+    pinMode(TRIG, OUTPUT);
+    pinMode(ECHO, INPUT);
 
-  /* Server configuration */
-  server.on("/", handle_root);
-  server.onNotFound(handle_notFound);
+    /** Pins for the first motor */
+    pinMode(IN_1, OUTPUT);
+    pinMode(IN_2, OUTPUT);
+    pinMode(ENA, OUTPUT);
 
-  /* Server begin */
-  server.begin();
+    /** Pins for the second motor */
+    pinMode(IN_3, OUTPUT);
+    pinMode(IN_4, OUTPUT);
+    pinMode(ENB, OUTPUT);
+    /** Start Serial at port 115200 */
+    Serial.begin(115200);
+    while (!Serial)
+        ;
+
+
+    /* Setup and configure Access Point */
+    setup_AP();
+
+    /* Server configuration */
+    server.on("/", handle_root);
+    server.onNotFound(handle_notFound);
+
+    /* Server begin */
+    server.begin();
+    attachInterrupt(digitalPinToInterrupt(ENCODER_PIN), readEncoder, RISING);
 }
 
-void loop()
-{
-  server.handleClient();
-}
+void loop() { server.handleClient(); }
