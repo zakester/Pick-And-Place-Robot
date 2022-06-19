@@ -75,7 +75,6 @@ double ultrasonic() {
 }
 
 int dir = 0;
-//int prvDir = 0;
 int pos = 0;
 bool startUltrasonic = false;
 bool startRotation = true;
@@ -127,7 +126,6 @@ void rotateRobot(double kp, double ki, double kd) {
     // start rotating
     if (e >= 0) {
         startUltrasonic = false;
-        //dir = prvDir;
     } else {
         // Turn Off The Motor
         speed = 0;
@@ -183,8 +181,6 @@ void handle_root() {
         return;
     }
 
-    // Serial.println("x: " + objectAngle + "diffAngle: " + diffAngle);
-
     double rotationDegreeRobot = 0.0;
 
     // Wait for 1 second till the AI complete processing
@@ -203,14 +199,11 @@ void handle_root() {
 
         if (ref == 0) return;
         if (dir == 1) {
-            ref -= 3;
+            ref -= 5;
         }
 
-        //prvDir = dir;
 
         isReady = true;
-
-         Serial.println(ref);
 
 
         std::string d =
