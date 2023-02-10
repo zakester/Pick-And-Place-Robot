@@ -22,9 +22,9 @@ After rotation process is done Ultrasonic will check if distance is more then 30
 
 
 ## Screenshots
-![01](/assets/images/01.png)
-![02](/assets/images/02.png)
-![03](/assets/images/03.png)
+![01](/assets/images/01.jpg)
+![02](/assets/images/02.jpg)
+![03](/assets/images/03.jpg)
 
 ## Video
 ![01](/assets/gif/01.gif)
@@ -32,8 +32,7 @@ After rotation process is done Ultrasonic will check if distance is more then 30
 ## Circuit
 ![Circuit](/assets/images/circuit.png)
 
-## PID
-![PID](/assets/images/pid.png)
+
 # Flowchart
 ![Flowchart](/assets/images/flowchart.png)
 ## Dataset
