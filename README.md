@@ -5,12 +5,14 @@ The project was created for my Bachelor Degree in Automation, our focus was to m
 
 This project consist of a mobile robot that follows the direction of the targeted container, it rotates to the point where it gets perpendicular with the detected object and then proceeds to march ahead until it reaches a certain distance away from the object, all this using various sensors, motors, Computer Vision, and mathematical methods.
 
+
 ## Approach
 Computer Vision part will be in a smartphone then we will send (x, y, width, label, rotationDegree) to ESP8266 through WiFi.
 
 ESP8266 will calculate how much the robot will need to rotate, then the rotation will start which is controlled with PID Controller. While that the ESP8266 will send the current state to the android app and generate graphs.
 
 After rotation process is done Ultrasonic will check if distance is more then 30cm so the robot will move forward until the condition is no longer true.
+
 
 ## Hardware
 - NodeMCU ESP8266.
@@ -21,13 +23,12 @@ After rotation process is done Ultrasonic will check if distance is more then 30
 - Smart Phone (I used Redmi Note 8).
 
 
-## Screenshots
-![01](/assets/images/image.jpg)
-![02](/assets/images/image.jpg)
-![03](/assets/images/image.jpg)
-
 ## Video
-![01](/assets/gif/01.gif)
+
+https://user-images.githubusercontent.com/93050973/218050704-b384f85f-4c16-4651-a173-7efa72804a64.mp4
+
+https://user-images.githubusercontent.com/93050973/218046619-cd421053-0fa4-4c3b-8324-5a749d2322f5.mp4
+
 
 ## Circuit
 
@@ -35,11 +36,13 @@ After rotation process is done Ultrasonic will check if distance is more then 30
   <img width="60%" src="/assets/images/circuit.png" />
 </p>
 
+
 # Flowchart
 
 <p align="center" width="100%">
   <img width="65%" src="/assets/images/flowchart.png" />
 </p>
+
 
 ## Dataset
 About 720 images for Target Package, Normal Package and Zone using smartphone Xiaomi Redmi Note 8 each image has 448x448px resolution.
@@ -59,6 +62,8 @@ We choose our labels to be as follow:
 - Zone 			-> zone
 
 - [__Kaggle Link to Dataset__](https://www.kaggle.com/datasets/hamzahadjammar/pick-and-place-packages-mobile-robot)
+
+
 # Computer Vision
 In order to distinguish the __*Target Package*__ from the __*Normal Packages*__, and in order to recognize the __*Zone*__, we train an Object Detection Model using Tensorflow Library.
 
@@ -82,6 +87,8 @@ Dataset trainded on __EfficientDet-Lite2__ model. Not the best, we can try find 
 | 5 | 32 | 60 | 0.81 | 0.78 |
 
 - [__You can check the code for training using here__](notebook/pick-and-place-32-batch-size-60-epochs.ipynb)
+
+
 # Libraries
 __C++__
 - ESP8266WebServer
