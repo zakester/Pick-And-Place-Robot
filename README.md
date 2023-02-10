@@ -22,25 +22,34 @@ After rotation process is done Ultrasonic will check if distance is more then 30
 
 
 ## Screenshots
-![01](/assets/images/01.jpg)
-![02](/assets/images/02.jpg)
-![03](/assets/images/03.jpg)
+![01](/assets/images/image.jpg)
+![02](/assets/images/image.jpg)
+![03](/assets/images/image.jpg)
 
 ## Video
 ![01](/assets/gif/01.gif)
 
 ## Circuit
-![Circuit](/assets/images/circuit.png)
 
+<p align="center" width="100%">
+  <img width="60%" src="/assets/images/circuit.png" />
+</p>
 
 # Flowchart
-![Flowchart](/assets/images/flowchart.png)
+
+<p align="center" width="100%">
+  <img width="65%" src="/assets/images/flowchart.png" />
+</p>
+
 ## Dataset
 About 720 images for Target Package, Normal Package and Zone using smartphone Xiaomi Redmi Note 8 each image has 448x448px resolution.
 
-![01](/assets/images/01.png)
-![02](/assets/images/02.png)
-![03](/assets/images/03.png)
+<p align="center" width="100%">
+  <img width="33%" src="/assets/images/image1.jpg">
+  <img width="33%" src="/assets/images/image2.jpg">
+  <img width="33%" src="/assets/images/image3.jpg">
+</p>
+
 
 The annotation files are xml files that contain some necessary information like path, width, height, label, x, y…ect, each image will be fed into the model with it’s annotation file, The annotation is done by LabelImg software.
 
