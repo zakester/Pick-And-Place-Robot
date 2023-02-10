@@ -50,7 +50,7 @@ We choose our labels to be as follow:
 - Target Package 	-> package_target
 - Zone 			-> zone
 
-__[Kaggle Link to Dataset]('link/to/dataset/')__
+__[Kaggle Link to Dataset]('https://www.kaggle.com/datasets/hamzahadjammar/pick-and-place-packages-mobile-robot')__
 # Computer Vision
 In order to distinguish the __*Target Package*__ from the __*Normal Packages*__, and in order to recognize the __*Zone*__, we train an Object Detection Model using Tensorflow Library.
 
